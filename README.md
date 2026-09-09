@@ -52,6 +52,14 @@ APK 指纹 (md5) 未变化时跳过重装, 开机开销可忽略。
 
 ## 更新日志
 
+### v1.1.4 (隐私清理 + 重签名)
+- **重签 APK**: 旧 `signing.keystore` 不慎被提交到公开仓库历史, 已作废;
+  重新生成新密钥签发 v1.1.4, 旧版本号无法直接覆盖安装, 需**卸载旧版再装新版**
+- **隐私清理**: git 历史已用 filter-repo 重写, 删除了 keystore + 匿名化所有 commit
+  作者/邮箱; module.prop author 改为项目名
+- build.sh 移除绝对路径, 基于脚本自身位置自动定位; 改用通用 shell 兼容
+- 删除 v1.1.0/v1.1.1/v1.1.2/v1.1.3 所有 GitHub Release (它们都包含泄露密钥签的 APK)
+
 ### v1.1.3 (系统栏同步压暗, 已在 OnePlus/ColorOS Android 15 验证)
 - 修复 **状态栏/通知栏/底部手势条不变暗**: 压暗遮罩升级为
   `TYPE_ACCESSIBILITY_OVERLAY` 层级 (位于所有系统 UI 窗口之上),
