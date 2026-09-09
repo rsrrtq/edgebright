@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EdgeBright 边缘亮度</string>
+    <string name="app_desc">在屏幕边缘上下滑动调节全局亮度。手势算法移植自搜书大师阅读页：40dp 边缘带、20dp 触发阈值、速度加权步进；亮度低于系统下限自动叠加遮罩继续压暗（夜间可低于系统最低亮度）。</string>
+    <string name="edge_left">左边缘手势</string>
+    <string name="edge_right">右边缘手势</string>
+    <string name="band_width">边缘带宽度（越小越不影响边缘操作）</string>
+    <string name="start_service">启动服务</string>
+    <string name="stop_service">停止服务</string>
+    <string name="reboot_apply">已保存，服务已重启生效</string>
+    <string name="need_overlay_perm">缺少悬浮窗权限，请授权后重试</string>
+    <string name="status_running">运行中 · 当前亮度 %1$d%%</string>
+    <string name="status_running_default">运行中 · 在屏幕边缘上下滑动调节亮度</string>
+    <string name="status_stopped">已停止</string>
+    <string name="notif_text">亮度 %1$d%% · 上下滑动边缘调节</string>
+</resources>
