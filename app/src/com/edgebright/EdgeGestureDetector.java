@@ -28,7 +28,7 @@ public class EdgeGestureDetector {
     private static final float VELOCITY_CAP = 10000f;
     private static final float RATE_INCREASE = 500f;  // 上滑增亮
     private static final float RATE_DECREASE = 400f;  // 下滑减暗
-    private static final int MIN_PERCENT = -50;
+    private static final int MIN_PERCENT = -100;
     private static final int MAX_PERCENT = 100;
 
     private final Callback callback;

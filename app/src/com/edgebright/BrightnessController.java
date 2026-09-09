@@ -18,13 +18,13 @@ import android.view.WindowManager;
  */
 public class BrightnessController {
 
-    public static final int MIN_PERCENT = -50;
+    public static final int MIN_PERCENT = -100;
     public static final int MAX_PERCENT = 100;
     /** 系统亮度下限, 0 在部分面板上会直接熄屏, 2 更安全 */
     private static final int MIN_SYS_BRIGHTNESS = 2;
     private static final int MAX_SYS_BRIGHTNESS = 255;
-    /** 低于系统下限时遮罩最大不透明度 (0..255), -50% 时约 70% 黑 */
-    private static final int MAX_DIM_ALPHA = 185;
+    /** 低于系统下限时遮罩最大不透明度 (0..255), -100% 时约 92% 黑 */
+    private static final int MAX_DIM_ALPHA = 235;
 
     public interface Listener {
         void onPercentChanged(int percent);
@@ -131,8 +131,9 @@ public class BrightnessController {
         mainHandler.post(() -> {
             float alpha = 0f;
             if (percent <= 0) {
-                // -50% → MAX_DIM_ALPHA
-                alpha = Math.min(-percent, 50) / 50f * (MAX_DIM_ALPHA / 255f);
+                // -100% → MAX_DIM_ALPHA
+                alpha = Math.min(-percent, -MIN_PERCENT) / (float) (-MIN_PERCENT)
+                        * (MAX_DIM_ALPHA / 255f);
             }
             dimOverlay.setBackgroundColor(((int) (alpha * 255f) << 24) & 0xFF000000);
             dimOverlay.setVisibility(percent <= 0 && alpha > 0f ? View.VISIBLE : View.GONE);
