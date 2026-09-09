@@ -5,7 +5,11 @@
 
 MODDIR=${0%/*}
 PKG="com.edgebright"
-APK="$MODDIR/app.apk"
+APK="$MODPATH/app.apk"
+[ -z "$APK" ] && APK="$MODDIR/app.apk"
+
+exec > "$MODDIR/service.log" 2>&1
+echo "=== EdgeBright service.sh $(date) ==="
 
 # 等待系统完全启动 (包管理器就绪)
 until [ "$(getprop sys.boot_completed)" = "1" ]; do
@@ -13,33 +17,53 @@ until [ "$(getprop sys.boot_completed)" = "1" ]; do
 done
 sleep 5
 
+if [ ! -f "$APK" ]; then
+  echo "缺少 app.apk, 跳过"
+  exit 0
+fi
+
 # 版本指纹: APK 变化才重新安装, 避免每次开机重装
 MD5=$(md5sum "$APK" 2>/dev/null | cut -d' ' -f1)
 INSTALLED_MD5=$(cat "$MODDIR/.installed_md5" 2>/dev/null)
 
-if [ ! -f "$APK" ]; then
-  log -t EdgeBright "缺少 app.apk, 跳过"
-  exit 0
+if [ "$MD5" != "$INSTALLED_MD5" ]; then
+  echo "安装/更新 APK (md5=$MD5)"
+  pm install -r -g "$APK" && echo "$MD5" > "$MODDIR/.installed_md5"
 fi
 
 # 已在运行则不重复处理
-if ! pidof "$PKG" >/dev/null 2>&1; then
-  if [ "$MD5" != "$INSTALLED_MD5" ]; then
-    pm install -r -g "$APK" >/dev/null 2>&1
-    echo "$MD5" > "$MODDIR/.installed_md5"
-  fi
+if pidof "$PKG" >/dev/null 2>&1; then
+  echo "已在运行, 跳过"
+  exit 0
+fi
 
-  # root 强制授权 (即使 ROM 重置 appops, 每次开机都会重新授予)
-  appops set "$PKG" SYSTEM_ALERT_WINDOW allow >/dev/null 2>&1
-  appops set "$PKG" WRITE_SETTINGS allow >/dev/null 2>&1
-  pm grant "$PKG" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
+# root 强制授权 (即使 ROM 重置 appops, 每次开机都会重新授予)
+appops set "$PKG" SYSTEM_ALERT_WINDOW allow
+appops set "$PKG" WRITE_SETTINGS allow
+pm grant "$PKG" android.permission.POST_NOTIFICATIONS 2>/dev/null
 
-  API=$(getprop ro.build.version.sdk)
-  if [ "$API" -ge 26 ]; then
-    am start-foreground-service -n "$PKG/.EdgeService" >/dev/null 2>&1
+start_svc() {
+  if [ "$(getprop ro.build.version.sdk)" -ge 26 ]; then
+    am start-foreground-service -n "$PKG/.EdgeService"
   else
-    am startservice -n "$PKG/.EdgeService" >/dev/null 2>&1
+    am startservice -n "$PKG/.EdgeService"
   fi
+}
+
+start_svc
+sleep 4
+
+# 首次启动可能因包管理器未就绪失败, 重试一次
+if ! pidof "$PKG" >/dev/null 2>&1; then
+  echo "首次启动失败, 重试"
+  start_svc
+  sleep 3
+fi
+
+if pidof "$PKG" >/dev/null 2>&1; then
+  echo "服务已启动 pid=$(pidof "$PKG")"
+else
+  echo "警告: 服务未能启动, 可手动打开 EdgeBright 应用点启动"
 fi
 
 exit 0
