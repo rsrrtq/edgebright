@@ -24,19 +24,29 @@ echo "[2/6] aapt2 链接 (生成基础 APK + R.java)"
   -I "$PLATFORM" \
   --min-sdk-version 24 \
   --target-sdk-version 34 \
-  --version-code 2 \
-  --version-name 1.1.0 \
+  --version-code 3 \
+  --version-name 1.1.1 \
   --java "$BUILD/gen" \
   "$BUILD/res.zip"
 
 echo "[3/6] javac 编译"
 find "$APP/src" "$BUILD/gen" -name "*.java" > "$BUILD/sources.txt"
-"$JAVA_HOME/bin/javac" \
+rm -rf "$BUILD/classes"
+mkdir -p "$BUILD/classes"
+JAVAC_OUT=$("$JAVA_HOME/bin/javac" \
   -source 8 -target 8 \
   -bootclasspath "$PLATFORM:$BT/core-lambda-stubs.jar" \
   -encoding UTF-8 \
   -d "$BUILD/classes" \
-  @"$BUILD/sources.txt" 2>&1 | grep -v "^警告" || true
+  @"$BUILD/sources.txt" 2>&1)
+JAVAC_STATUS=$?
+if [ -n "$JAVAC_OUT" ]; then
+  echo "$JAVAC_OUT"
+fi
+if [ $JAVAC_STATUS -ne 0 ]; then
+  echo "javac 编译失败 (exit $JAVAC_STATUS), 终止构建"
+  exit 1
+fi
 
 echo "[4/6] d8 生成 dex"
 "$BT/d8" --release --lib "$PLATFORM" \
@@ -49,7 +59,7 @@ zip -q -j base.apk classes.dex
 
 echo "[6/6] 对齐 + 签名"
 "$BT/zipalign" -f 4 base.apk aligned.apk
-KS="$BUILD/debug.keystore"
+KS="$ROOT/signing.keystore"
 if [ ! -f "$KS" ]; then
   "$JAVA_HOME/bin/keytool" -genkeypair -keystore "$KS" \
     -alias edgebright -keyalg RSA -keysize 2048 -validity 10000 \

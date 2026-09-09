@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
+import android.os.Build;
 import android.os.IBinder;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -47,12 +48,21 @@ public class EdgeService extends Service {
 
         controller = new BrightnessController(this, percent ->
                 notificationManager.notify(1, buildNotification(percent)));
-        controller.restoreFromSystem();
+        // 恢复基准: 优先用上次保存的百分比, 其次系统亮度
+        // (部分 ROM 如 ColorOS int 范围 0..2047 且 float 读不出, 直接换算会失真)
+        int saved = getSharedPreferences(PREFS, MODE_PRIVATE).getInt("percent", -1);
+        if (saved >= 1 && saved <= 100) {
+            controller.initPercent(saved);
+        } else {
+            controller.restoreFromSystem();
+        }
 
         gestureDetector = new EdgeGestureDetector(this, percent -> {
             controller.setPercent(percent);
             savePercent(percent);
         });
+        // 关键: 手势基准值必须与恢复出的系统亮度同步, 否则首滑会从 0 跳变
+        gestureDetector.setCurrentPercent(controller.getPercent());
 
         addDimOverlay();
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
@@ -93,7 +103,7 @@ public class EdgeService extends Service {
         }
     }
 
-    /** 全屏压暗遮罩: 完全透明、不可触摸, 不影响任何操作 */
+    /** 全屏压暗遮罩: 完全透明、不可触摸, 覆盖含状态栏/手势条的整屏 */
     private void addDimOverlay() {
         dimOverlay = new View(this);
         dimOverlay.setBackgroundColor(Color.TRANSPARENT);
@@ -106,11 +116,21 @@ public class EdgeService extends Service {
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                         | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.TRANSLUCENT);
+        spanFullScreen(lp);
         try {
             windowManager.addView(dimOverlay, lp);
             controller.attachDimOverlay(dimOverlay);
         } catch (Exception ignored) {
         }
+    }
+
+    /** 去掉系统栏避让 (fitInsetsTypes 默认会把窗口挤进 content 区域) */
+    private void spanFullScreen(WindowManager.LayoutParams lp) {
+        if (Build.VERSION.SDK_INT >= 30) {
+            lp.setFitInsetsTypes(0);
+        }
+        lp.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
     }
 
     /** 边缘触摸条: 透明但可接收触摸 (与原版 40dp 边缘带对应) */
@@ -135,9 +155,11 @@ public class EdgeService extends Service {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                         | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT);
         lp.gravity = left ? Gravity.START : Gravity.END;
+        spanFullScreen(lp);
         try {
             windowManager.addView(strip, lp);
             if (left) {
@@ -155,6 +177,9 @@ public class EdgeService extends Service {
     }
 
     private void createChannel() {
+        if (Build.VERSION.SDK_INT < 26) {
+            return;  // NotificationChannel 仅 API 26+
+        }
         NotificationChannel channel = new NotificationChannel(CHANNEL_ID,
                 getString(R.string.app_name),
                 NotificationManager.IMPORTANCE_LOW);
@@ -167,8 +192,10 @@ public class EdgeService extends Service {
         Intent intent = new Intent(this, MainActivity.class);
         PendingIntent pi = PendingIntent.getActivity(this, 0, intent,
                 PendingIntent.FLAG_IMMUTABLE);
-        Notification.Builder b = new Notification.Builder(this, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_menu_view)
+        Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(this, CHANNEL_ID)
+                : new Notification.Builder(this);
+        b.setSmallIcon(android.R.drawable.ic_menu_view)
                 .setContentTitle(getString(R.string.app_name))
                 .setContentText(text)
                 .setContentIntent(pi)

@@ -47,22 +47,44 @@ public class BrightnessController {
         applyOverlay();
     }
 
-    /** 从系统当前亮度恢复百分比 (对应原版 e9(): 0..255 → %) */
+    /** 从系统当前亮度恢复百分比 (对应原版 e9()) */
     public int restoreFromSystem() {
-        try {
-            int sys = Settings.System.getInt(context.getContentResolver(),
-                    Settings.System.SCREEN_BRIGHTNESS);
-            percent = Math.round(sys * 100f / 255f);
-        } catch (Settings.SettingNotFoundException e) {
-            percent = 50;
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            // API 29+: 优先浮点亮度 (0..1), 自动适配厂商扩展范围 (如 ColorOS 0..4095)
+            try {
+                float f = Settings.System.getFloat(context.getContentResolver(),
+                        "screen_brightness_float");
+                percent = Math.round(f * 100f);
+            } catch (Exception e) {
+                percent = restoreFromInt();
+            }
+        } else {
+            percent = restoreFromInt();
         }
         if (percent > MAX_PERCENT) percent = MAX_PERCENT;
         if (percent < 1) percent = 1;
         return percent;
     }
 
+    private int restoreFromInt() {
+        try {
+            int sys = Settings.System.getInt(context.getContentResolver(),
+                    Settings.System.SCREEN_BRIGHTNESS);
+            return Math.round(sys * 100f / 255f);
+        } catch (Settings.SettingNotFoundException e) {
+            return 50;
+        }
+    }
+
     public int getPercent() {
         return percent;
+    }
+
+    /** 直接初始化百分比 (来自本应用持久化值), 不写回系统 */
+    public void initPercent(int p) {
+        if (p > MAX_PERCENT) p = MAX_PERCENT;
+        if (p < 1) p = 1;
+        percent = p;
     }
 
     /** 设置亮度百分比 ∈ [-50, 100] (对应原版 bf) */
@@ -77,15 +99,21 @@ public class BrightnessController {
             if (Settings.System.getInt(cr, Settings.System.SCREEN_BRIGHTNESS_MODE, 1) != 0) {
                 Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS_MODE, 0);
             }
-            int sys;
-            if (p >= 1) {
-                sys = Math.round(p * 255f / 100f);
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                // 浮点亮度: 0..1, 系统自动映射厂商真实范围 (含 >255 的扩展范围)
+                float f = (p >= 1 ? p : 1) / 100f;
+                Settings.System.putFloat(cr, "screen_brightness_float", f);
             } else {
-                sys = MIN_SYS_BRIGHTNESS;  // 低于下限, 交给遮罩
+                int sys;
+                if (p >= 1) {
+                    sys = Math.round(p * 255f / 100f);
+                } else {
+                    sys = MIN_SYS_BRIGHTNESS;  // 低于下限, 交给遮罩
+                }
+                if (sys < MIN_SYS_BRIGHTNESS) sys = MIN_SYS_BRIGHTNESS;
+                if (sys > MAX_SYS_BRIGHTNESS) sys = MAX_SYS_BRIGHTNESS;
+                Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS, sys);
             }
-            if (sys < MIN_SYS_BRIGHTNESS) sys = MIN_SYS_BRIGHTNESS;
-            if (sys > MAX_SYS_BRIGHTNESS) sys = MAX_SYS_BRIGHTNESS;
-            Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS, sys);
         } catch (Exception e) {
             // WRITE_SETTINGS 未授权时静默失败, 服务里会提前检查
         }
