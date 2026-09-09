@@ -11,6 +11,7 @@ import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.os.Build;
 import android.os.IBinder;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -32,9 +33,13 @@ public class EdgeService extends Service {
     public static final String KEY_EDGE_LEFT = "edge_left";
     public static final String KEY_EDGE_RIGHT = "edge_right";
     public static final String KEY_BAND_DP = "band_dp";
+    /** 无障碍服务就绪/失效时请求重建遮罩 (切换层级) */
+    public static final String ACTION_REBUILD_OVERLAY = "com.edgebright.REBUILD_OVERLAY";
 
     private WindowManager windowManager;
     private View leftStrip, rightStrip, dimOverlay;
+    /** 添加 dimOverlay 用的 WindowManager (可能与 windowManager 不同上下文) */
+    private WindowManager dimWm;
     private EdgeGestureDetector gestureDetector;
     private BrightnessController controller;
     private NotificationManager notificationManager;
@@ -77,6 +82,11 @@ public class EdgeService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_REBUILD_OVERLAY.equals(intent.getAction())) {
+            // 无障碍通道状态变化: 拆掉旧遮罩, 按当前可用层级重建
+            removeDimOverlay();
+            addDimOverlay();
+        }
         return START_STICKY;
     }
 
@@ -85,7 +95,7 @@ public class EdgeService extends Service {
         gestureDetector.release();
         removeView(leftStrip);
         removeView(rightStrip);
-        removeView(dimOverlay);
+        removeDimOverlay();
         super.onDestroy();
     }
 
@@ -103,24 +113,86 @@ public class EdgeService extends Service {
         }
     }
 
+    private void removeDimOverlay() {
+        if (dimOverlay != null && dimWm != null) {
+            try {
+                dimWm.removeView(dimOverlay);
+            } catch (Exception ignored) {
+            }
+        }
+        dimOverlay = null;
+    }
+
     /** 全屏压暗遮罩: 完全透明、不可触摸, 覆盖含状态栏/手势条的整屏 */
     private void addDimOverlay() {
-        dimOverlay = new View(this);
+        int type = pickOverlayType();
+        // TYPE_ACCESSIBILITY_OVERLAY 必须用无障碍服务自身的 Context 添加
+        // (它带有系统签发的窗口 token, EdgeService 自己的 Context 会 BadTokenException)
+        android.content.Context ctx = DimAccessibilityService.instance;
+        WindowManager wm;
+        if (type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY && ctx != null) {
+            wm = (WindowManager) ctx.getSystemService(WINDOW_SERVICE);
+        } else {
+            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+            ctx = this;
+            wm = windowManager;
+        }
+        dimWm = wm;
+        dimOverlay = new View(ctx);
         dimOverlay.setBackgroundColor(Color.TRANSPARENT);
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                type,
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                         | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                         | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.TRANSLUCENT);
         spanFullScreen(lp);
+        android.util.Log.i("EdgeBright", "addDimOverlay type=" + lp.type
+                + " accEnabled=" + isAccessibilityChannelEnabled()
+                + " accCtx=" + (DimAccessibilityService.instance != null));
         try {
-            windowManager.addView(dimOverlay, lp);
+            wm.addView(dimOverlay, lp);
             controller.attachDimOverlay(dimOverlay);
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            android.util.Log.e("EdgeBright", "addView 失败 type=" + lp.type, e);
+            // 极端情况 (无障碍刚被关、层级被系统拒绝): 降级重试一次
+            if (lp.type != WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY) {
+                removeView(dimOverlay);
+                lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+                try {
+                    windowManager.addView(dimOverlay, lp);
+                    dimWm = windowManager;
+                    controller.attachDimOverlay(dimOverlay);
+                } catch (Exception ignored2) {
+                }
+            }
+        }
+    }
+
+    /**
+     * 遮罩窗口层级: 无障碍服务已启用时用 TYPE_ACCESSIBILITY_OVERLAY
+     * (在状态栏/通知栏/导航栏之上, 系统只校验"当前绑定的无障碍服务包名 ==
+     * 窗口包名", 同包的 EdgeService 也能添加); 否则退回普通悬浮层。
+     */
+    private int pickOverlayType() {
+        if (Build.VERSION.SDK_INT >= 28 && isAccessibilityChannelEnabled()) {
+            return WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY;
+        }
+        return WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+    }
+
+    private boolean isAccessibilityChannelEnabled() {
+        try {
+            String enabled = Settings.Secure.getString(getContentResolver(),
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            return enabled != null
+                    && enabled.contains(new android.content.ComponentName(
+                            this, DimAccessibilityService.class).flattenToString());
+        } catch (Exception e) {
+            return false;
         }
     }
 

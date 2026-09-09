@@ -13,4 +13,5 @@
     <string name="status_running_default">运行中 · 在屏幕边缘上下滑动调节亮度</string>
     <string name="status_stopped">已停止</string>
     <string name="notif_text">亮度 %1$d%% · 上下滑动边缘调节</string>
+    <string name="acc_desc">EdgeBright 超低亮度：启用后压暗遮罩可覆盖状态栏、通知栏与手势条，实现全屏均匀变暗。本服务不读取任何屏幕内容。</string>
 </resources>

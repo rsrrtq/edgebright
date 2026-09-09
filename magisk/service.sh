@@ -31,6 +31,24 @@ if [ "$MD5" != "$INSTALLED_MD5" ]; then
   pm install -r -g "$APK" && echo "$MD5" > "$MODDIR/.installed_md5"
 fi
 
+# 启用无障碍通道 (root 自动开启): 压暗遮罩由此获得 ACCESSIBILITY_OVERLAY 层级,
+# 才能盖过状态栏/通知栏/手势条。保留用户已启用的其他无障碍服务。
+ACC_SVC="$PKG/com.edgebright.DimAccessibilityService"
+CUR=$(settings get secure enabled_accessibility_services)
+case ";$CUR;" in
+  *";$ACC_SVC;"*) echo "无障碍通道已启用" ;;
+  *)
+    if [ -z "$CUR" ] || [ "$CUR" = "null" ]; then
+      NEW="$ACC_SVC"
+    else
+      NEW="$CUR:$ACC_SVC"
+    fi
+    settings put secure enabled_accessibility_services "$NEW"
+    echo "已追加无障碍通道: $NEW"
+    ;;
+esac
+settings put secure accessibility_enabled 1
+
 # 已在运行则不重复处理
 if pidof "$PKG" >/dev/null 2>&1; then
   echo "已在运行, 跳过"

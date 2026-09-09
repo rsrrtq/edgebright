@@ -24,8 +24,8 @@ echo "[2/6] aapt2 链接 (生成基础 APK + R.java)"
   -I "$PLATFORM" \
   --min-sdk-version 24 \
   --target-sdk-version 34 \
-  --version-code 4 \
-  --version-name 1.1.2 \
+  --version-code 5 \
+  --version-name 1.1.3 \
   --java "$BUILD/gen" \
   "$BUILD/res.zip"
 
@@ -33,6 +33,8 @@ echo "[3/6] javac 编译"
 find "$APP/src" "$BUILD/gen" -name "*.java" > "$BUILD/sources.txt"
 rm -rf "$BUILD/classes"
 mkdir -p "$BUILD/classes"
+# set -e 下命令替换失败会直接退出并吞掉输出, 这里临时关掉再捕获
+set +e
 JAVAC_OUT=$("$JAVA_HOME/bin/javac" \
   -source 8 -target 8 \
   -bootclasspath "$PLATFORM:$BT/core-lambda-stubs.jar" \
@@ -40,6 +42,7 @@ JAVAC_OUT=$("$JAVA_HOME/bin/javac" \
   -d "$BUILD/classes" \
   @"$BUILD/sources.txt" 2>&1)
 JAVAC_STATUS=$?
+set -e
 if [ -n "$JAVAC_OUT" ]; then
   echo "$JAVAC_OUT"
 fi
