@@ -18,12 +18,13 @@
 | 低于下限 | shadeView 遮罩继续压暗 | 全屏 FLAG_NOT_TOUCHABLE 遮罩, 同思路 |
 | 反馈 | Toast "N%" | 常驻通知显示当前百分比 |
 
-亮度范围 -50% ~ 100%: 1~100 写系统亮度; ≤0 时系统亮度压到下限、
-遮罩逐级加深, 可低于系统最低亮度 (夜间护眼)。
+亮度范围 -100% ~ 100%: 1~100 写系统亮度; ≤0 时系统亮度压到下限、
+遮罩逐级加深至约 92% 黑度, 远低于系统最低亮度 (深夜全黑房间可用,
+OLED 屏效果尤佳)。
 
 ## 安装
 
-1. Magisk → 模块 → 从本地安装 → 选择 `edgebright-v1.1.1.zip`
+1. Magisk → 模块 → 从本地安装 → 选择 `edgebright-v1.1.2.zip`
 2. 重启。每次开机 root 脚本自动:
    - `pm install` 安装/更新 EdgeBright (用户应用, 不碰 /system)
    - `appops` 强制授予悬浮窗 (SYSTEM_ALERT_WINDOW) 与写设置 (WRITE_SETTINGS)
@@ -50,6 +51,10 @@ APK 指纹 (md5) 未变化时跳过重装, 开机开销可忽略。
   ROM 即使重置 appops 也会在下一次开机恢复, 无需手动授权
 
 ## 更新日志
+
+### v1.1.2 (超暗加深)
+- 超暗区间从 -50% 扩展到 **-100%**, 遮罩最大黑度从 ~72% 加深到 **~92%**
+- 继续在边缘下滑即可一路压到全黑边缘
 
 ### v1.1.1 (真机修复, 已在 OnePlus/ColorOS Android 15 验证)
 - 修复 **Android 14/15 服务启动即崩溃**: specialUse 前台服务需 `FOREGROUND_SERVICE_SPECIAL_USE` 权限
