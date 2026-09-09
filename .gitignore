@@ -3,3 +3,5 @@ dist/
 *.zip
 debug.keystore
 android-sdk/
+# 签名密钥绝不入库 (公钥仓库中曾被错误提交, 现已从历史清除)
+signing.keystore
