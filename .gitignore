@@ -1,0 +1,5 @@
+build/
+dist/
+*.zip
+debug.keystore
+android-sdk/
