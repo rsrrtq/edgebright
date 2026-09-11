@@ -18,13 +18,20 @@ import android.view.WindowManager;
  */
 public class BrightnessController {
 
-    public static final int MIN_PERCENT = -100;
+    public static final int MIN_PERCENT = -150;
     public static final int MAX_PERCENT = 100;
     /** 系统亮度下限, 0 在部分面板上会直接熄屏, 2 更安全 */
     private static final int MIN_SYS_BRIGHTNESS = 2;
     private static final int MAX_SYS_BRIGHTNESS = 255;
-    /** 低于系统下限时遮罩最大不透明度 (0..255), -100% 时约 92% 黑 */
-    private static final int MAX_DIM_ALPHA = 235;
+    /**
+     * 遮罩不透明度分段 (0..255):
+     *  0 ~ -100%  -> 0 ~ 235 (约 92% 黑)
+     * -100 ~ -150% -> 235 ~ 250 (约 98% 黑, 极暗末段)
+     */
+    private static final int DIM_DEPTH = 100;
+    private static final int DEEP_DEPTH = 150;
+    private static final int DIM_ALPHA = 235;
+    private static final int MAX_DIM_ALPHA = 250;
 
     public interface Listener {
         void onPercentChanged(int percent);
@@ -131,9 +138,14 @@ public class BrightnessController {
         mainHandler.post(() -> {
             float alpha = 0f;
             if (percent <= 0) {
-                // -100% → MAX_DIM_ALPHA
-                alpha = Math.min(-percent, -MIN_PERCENT) / (float) (-MIN_PERCENT)
-                        * (MAX_DIM_ALPHA / 255f);
+                int depth = Math.min(-percent, DEEP_DEPTH);   // 0..150
+                if (depth <= DIM_DEPTH) {
+                    alpha = depth / (float) DIM_DEPTH * (DIM_ALPHA / 255f);
+                } else {
+                    alpha = DIM_ALPHA / 255f
+                            + (depth - DIM_DEPTH) / (float) (DEEP_DEPTH - DIM_DEPTH)
+                            * ((MAX_DIM_ALPHA - DIM_ALPHA) / 255f);
+                }
             }
             dimOverlay.setBackgroundColor(((int) (alpha * 255f) << 24) & 0xFF000000);
             dimOverlay.setVisibility(percent <= 0 && alpha > 0f ? View.VISIBLE : View.GONE);

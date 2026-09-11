@@ -27,8 +27,8 @@ echo "[2/6] aapt2 链接 (生成基础 APK + R.java)"
   -I "$PLATFORM" \
   --min-sdk-version 24 \
   --target-sdk-version 34 \
-  --version-code 6 \
-  --version-name 1.1 \
+  --version-code 7 \
+  --version-name 1.2 \
   --java "$BUILD/gen" \
   "$BUILD/res.zip"
 

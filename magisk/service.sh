@@ -5,8 +5,12 @@
 
 MODDIR=${0%/*}
 PKG="com.edgebright"
-APK="$MODPATH/app.apk"
-[ -z "$APK" ] && APK="$MODDIR/app.apk"
+# Magisk 会提供 $MODPATH; APatch 不提供 (为空时 "$MODPATH/app.apk" 会变成 /app.apk),
+# 所以默认用模块自身目录, 只在 $MODPATH 下确实存在时才优先用它
+APK="$MODDIR/app.apk"
+if [ -n "$MODPATH" ] && [ -f "$MODPATH/app.apk" ]; then
+  APK="$MODPATH/app.apk"
+fi
 
 exec > "$MODDIR/service.log" 2>&1
 echo "=== EdgeBright service.sh $(date) ==="
@@ -18,7 +22,7 @@ done
 sleep 5
 
 if [ ! -f "$APK" ]; then
-  echo "缺少 app.apk, 跳过"
+  echo "缺少 app.apk ($APK), 跳过"
   exit 0
 fi
 
