@@ -10,7 +10,9 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -40,6 +42,9 @@ public class EdgeService extends Service {
     private View leftStrip, rightStrip, dimOverlay;
     /** 添加 dimOverlay 用的 WindowManager (可能与 windowManager 不同上下文) */
     private WindowManager dimWm;
+    /** 无障碍通道自愈轮询 (APK 被替换/系统清理后自动恢复, 否则遮罩退回普通层) */
+    private final Handler a11yHandler = new Handler(Looper.getMainLooper());
+    private boolean a11ySelfHealGaveUp;
     private EdgeGestureDetector gestureDetector;
     private BrightnessController controller;
     private NotificationManager notificationManager;
@@ -78,6 +83,8 @@ public class EdgeService extends Service {
             addEdgeStrip(false);
         }
         startForeground(1, buildNotification(controller.getPercent()));
+        // 无障碍通道自愈: 首次延迟 1s, 之后每 5s 检查
+        a11yHandler.postDelayed(a11ySelfHeal, 1000);
     }
 
     @Override
@@ -92,6 +99,7 @@ public class EdgeService extends Service {
 
     @Override
     public void onDestroy() {
+        a11yHandler.removeCallbacksAndMessages(null);
         gestureDetector.release();
         removeView(leftStrip);
         removeView(rightStrip);
@@ -182,6 +190,44 @@ public class EdgeService extends Service {
             return WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY;
         }
         return WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+    }
+
+    private final Runnable a11ySelfHeal = new Runnable() {
+        @Override
+        public void run() {
+            if (!a11ySelfHealGaveUp) {
+                ensureAccessibilityChannel();
+            }
+            a11yHandler.postDelayed(this, 5000);
+        }
+    };
+
+    /**
+     * 通道被系统关掉 (APK 被替换 / ROM 清理 / 电池优化) 时自动恢复。
+     * 依赖 WRITE_SECURE_SETTINGS, 由 root 模块脚本 pm grant 授予;
+     * 未授权则只记一次日志并停手, 不刷屏。
+     */
+    private void ensureAccessibilityChannel() {
+        if (Build.VERSION.SDK_INT < 28 || isAccessibilityChannelEnabled()) {
+            return;
+        }
+        String svc = new android.content.ComponentName(
+                this, DimAccessibilityService.class).flattenToString();
+        try {
+            String cur = Settings.Secure.getString(getContentResolver(),
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            String next = (cur == null || cur.isEmpty() || "null".equals(cur))
+                    ? svc : cur + ":" + svc;
+            Settings.Secure.putString(getContentResolver(),
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, next);
+            Settings.Secure.putInt(getContentResolver(),
+                    Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+            android.util.Log.i("EdgeBright", "无障碍通道已自愈恢复");
+        } catch (Exception e) {
+            a11ySelfHealGaveUp = true;
+            android.util.Log.w("EdgeBright",
+                    "无障碍通道自愈失败 (缺少 WRITE_SECURE_SETTINGS): " + e);
+        }
     }
 
     private boolean isAccessibilityChannelEnabled() {

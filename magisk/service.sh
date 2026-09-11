@@ -59,6 +59,8 @@ fi
 appops set "$PKG" SYSTEM_ALERT_WINDOW allow
 appops set "$PKG" WRITE_SETTINGS allow
 pm grant "$PKG" android.permission.POST_NOTIFICATIONS 2>/dev/null
+# 无障碍通道自愈所需: 通道被系统关闭时应用可自行恢复
+pm grant "$PKG" android.permission.WRITE_SECURE_SETTINGS 2>/dev/null
 
 start_svc() {
   if [ "$(getprop ro.build.version.sdk)" -ge 26 ]; then
